@@ -105,4 +105,3 @@ if __name__ == "__main__":
 
     # Run the SQL injection tests
     sql_tool.run()
-r
