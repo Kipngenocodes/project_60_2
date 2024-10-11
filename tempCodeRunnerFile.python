@@ -1,3 +1,152 @@
-from platform import processor
+from bs4 import BeautifulSoup
+import requests
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
-print(processor())
+API_KEY = 'YOUR_2CAPTCHA_API_KEY'  # Replace with your 2Captcha API key
+TARGET_URL = 'https://www.amazon.com/'  # The target website URL
+
+# Function to solve CAPTCHA using 2Captcha
+def solve_captcha(site_key, page_url):
+    """Solves the CAPTCHA using 2Captcha and returns the solution."""
+    print("[INFO] Submitting CAPTCHA to 2Captcha...")
+    response = requests.post(
+        "http://2captcha.com/in.php",
+        data={
+            "key": API_KEY,
+            "method": "userrecaptcha",
+            "googlekey": site_key,
+            "pageurl": page_url
+        }
+    )
+    
+    print(f"[DEBUG] Raw response from 2Captcha: {response.text}")
+    
+    if "OK|" in response.text:
+        captcha_id = response.text.split('|')[1]
+    else:
+        print(f"[ERROR] Invalid response from 2Captcha: {response.text}")
+        return None
+    
+    print("[INFO] Waiting for CAPTCHA to be solved...")
+    time.sleep(20)  # Wait for the CAPTCHA to be solved
+    
+    solution_response = requests.get(
+        f"http://2captcha.com/res.php?key={API_KEY}&action=get&id={captcha_id}"
+    )
+    
+    print(f"[DEBUG] Raw response from 2Captcha (solution): {solution_response.text}")
+    
+    if "CAPCHA_NOT_READY" in solution_response.text:
+        print("[INFO] CAPTCHA not ready yet, retrying...")
+        time.sleep(10)
+        return solve_captcha(site_key, page_url)
+    
+    if "OK|" in solution_response.text:
+        captcha_solution = solution_response.text.split('|')[1]
+        print(f"[INFO] CAPTCHA Solved: {captcha_solution}")
+        return captcha_solution
+    else:
+        print(f"[ERROR] Failed to solve CAPTCHA: {solution_response.text}")
+        return None
+
+# Function to get all forms from the webpage
+def get_all_forms(driver):
+    """Returns all form tags found on a web page using Selenium."""
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    return soup.find_all("form")
+
+# Function to get details of a form
+def get_form_details(form):
+    """Returns the HTML details of a form, including action, method, and list of form controls (inputs, etc.)."""
+    details = {}
+    action = form.attrs.get("action").lower()
+    method = form.attrs.get("method", "get").lower()
+    inputs = []
+    
+    for input_tag in form.find_all("input"):
+        input_type = input_tag.attrs.get("type", "text")
+        input_name = input_tag.attrs.get("name")
+        input_value = input_tag.attrs.get("value", "")
+        inputs.append({"type": input_type, "name": input_name, "value": input_value})
+
+    for select in form.find_all("select"):
+        select_name = select.attrs.get("name")
+        select_type = "select"
+        select_options = []
+        select_default_value = ""
+        
+        for select_option in select.find_all("option"):
+            option_value = select_option.attrs.get("value")
+            if option_value:
+                select_options.append(option_value)
+                if select_option.attrs.get("selected"):
+                    select_default_value = option_value
+        
+        if not select_default_value and select_options:
+            select_default_value = select_options[0]
+        
+        inputs.append({"type": select_type, "name": select_name, "values": select_options, "value": select_default_value})
+
+    for textarea in form.find_all("textarea"):
+        textarea_name = textarea.attrs.get("name")
+        textarea_value = textarea.text
+        inputs.append({"type": "textarea", "name": textarea_name, "value": textarea_value})
+        
+    details["action"] = action
+    details["method"] = method
+    details["inputs"] = inputs
+    
+    return details
+
+if __name__ == "__main__":
+    # Setup Selenium
+    chrome_options = Options()
+    # Uncomment the following line for debugging
+    # chrome_options.add_argument("--headless")  # Run headlessly (no GUI)
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    
+    try:
+        # Open the target URL
+        print(f"[INFO] Opening URL: {TARGET_URL}")
+        driver.get(TARGET_URL)
+
+        # Wait for the page to load
+        time.sleep(5)  # You can adjust this time as needed
+
+        try:
+            # Wait for the CAPTCHA element to be present
+            captcha_site_key = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.g-recaptcha"))
+            )
+            site_key = captcha_site_key.get_attribute("data-sitekey")
+            
+            # Solve CAPTCHA
+            captcha_solution = solve_captcha(site_key, TARGET_URL)
+            
+            if captcha_solution:
+                # Get all forms
+                forms = get_all_forms(driver)
+                for i, form in enumerate(forms, start=1):
+                    form_details = get_form_details(form)
+                    print("="*50, f"form #{i}", "="*50)
+                    print(form_details)
+                    
+                    # Here you can add logic to fill the form and submit it
+                    # Example: driver.find_element(By.NAME, 'field-keywords').send_keys('example input')
+                    # Example: driver.find_element(By.NAME, 'submit_button_name').click()
+                    
+        except Exception as e:
+            print(f"[ERROR] {str(e)}")
+        
+    finally:
+        driver.quit()
