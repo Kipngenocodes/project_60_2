@@ -10,10 +10,6 @@ client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client.sendto(b'Hello, server!', (target_host, target_port))
 
 # Receive some data
-try:
-    data, addr = client.recvfrom(4096)
-    print(data.decode())
-except ConnectionResetError as e:
-    print(f"Error: {e}")
-
+data, addr = client.recvfrom(4096)
+print(data.decode())
 client.close()

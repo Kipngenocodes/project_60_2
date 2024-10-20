@@ -1,21 +1,30 @@
-import socket 
+import socket
 
-target_host = "http://www.google.com/"
-target_port = 80
+# Target host and port
+target_host = "127.0.0.1"
+target_port = 9998
 
-# create a socket object 
+# Create a socket object
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# connect the client
-client.connect((target_host, target_port))
-print(f"connected  to {target_host}:{target_port}")
+# Connect the client
+try:
+    client.connect((target_host, target_port))
+    print(f"Connected to {target_host}:{target_port}")
 
+    # Send some data (HTTP request)
+    request = f"GET / HTTP/1.1\r\nHost: {target_host}\r\nConnection: close\r\n\r\n"
+    client.send(request.encode())
 
-# send some data
-client.send(b"GET / HTTP/1.1\r\nHost: google.com\r\n\r\n")
-# receive some data
-data = client.recv(4096)
+    # Receive some data
+    response = b""
+    while True:
+        data = client.recv(4096)
+        if not data:
+            break
+        response += data
 
-print(data.decode())
-# closing the client 
-client.close()
+    print(response.decode())
+finally:
+    # Closing the client
+    client.close()
